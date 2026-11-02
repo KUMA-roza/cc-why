@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- akapen-format: v3 -->
+<!--
+  akapen sheet template (標準モード) — シートの規約 v3 のシート + 赤ピン (視覚訂正) + 回答フォーム、HTML 1 枚で自己完結。
+  使い方: ./akapen/<topic>-01.html としてコピーし、TODO を埋める。
+  - 上半分 (#akSheet) = シート。骨格は固定: 結論 → 全体図 SVG (赤①②③) → 短い説明 (現物スクショ/モック) → 対比表 → 問いカード → 畳み付録
+  - 下半分 (#akForm) = 回答フォーム。問いカード (.qcard、判断材料) と回答ブロック (.q、答える場所) は別部品
+  - .q の radio name は q1, q2, … で script の QUESTIONS と同期する (ズレた問いは無言で「お任せ」扱いになる)
+  - DRAFT_KEY / DOC はシートごとに一意な固定文字列 (crypto.randomUUID は使わない — file:// 以外で undefined)
+  - 相対 URL 禁止 (画像は https 絶対 URL か data URI)。外部 JS ライブラリ禁止。Google Fonts は絶対 URL なので合法
+  - 色は 7 トークンのみ。赤 = 提案・訂正・論点の専任 / 青 = 導線 (リンク・ボタン・summary) の専任 / 残りは無彩色
+  - 回答は [貼り付ける文章を作る] → クリップボード + textarea。人が Claude Code のターミナルに貼る (形は references/reply-format.md)
+  - 回答フォームの選択肢にも絵 (.thumb) を付ける。人はシートを読んでからフォームで答える — フォームで絵が消えると想像で補わせることになる
+-->
+<!-- akapin:start -->
+<!--
+  - 赤ピン: 「✎ 視覚訂正モード」を ON にすると #akSheet 上のクリックでピン (赤①②③…) を打てる。座標は #akSheet 左上原点の %。
+    agent が先打ちする図中の ①②③ (注記) と、人のピン 赤①②③ は別物 — 混同しない
+-->
+<!-- akapin:end -->
+<!-- akrelay:start -->
+<!--
+  - akapen-serve.py 経由 (http://127.0.0.1) で開かれた時はボタンが [送信] になり、同じテキストを POST /akapen-answer で中継へ送る (貼り戻し不要)。file:// では従来経路
+-->
+<!-- akrelay:end -->
+<title>cc-why: ログから意図を推定する — 赤ペン</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#212529;--muted:#64707C;--line:#DEE2E6;--paper:#FFFFFF;--paper-dim:#F6F8FA;--accent:#2563EB;--red:#DC2626}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans',-apple-system,sans-serif;font-size:14.5px;line-height:1.9;margin:0;border-top:3px solid var(--red);padding:0 16px 40px}
+main{max-width:760px;margin:0 auto}
+.kicker{font-family:'IBM Plex Mono',Menlo,monospace;font-size:12.5px;letter-spacing:.08em;color:var(--red);font-weight:600}
+h1{font-size:25px;line-height:1.45;margin:8px 0 12px}
+h2{font-size:19px;line-height:1.45;margin:30px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+h3{font-size:15px;line-height:1.5;margin:0 0 8px}
+p{margin:8px 0}
+a{color:var(--accent)}
+.concl{border:1px solid var(--line);border-left:3px solid var(--red);border-radius:10px;padding:14px 18px}
+.red{color:var(--red)}
+.m{color:var(--muted);font-size:12.5px;line-height:1.7}
+.mono{font-family:'IBM Plex Mono',Menlo,monospace;font-size:13.5px}
+.gl{font-size:12.5px;color:var(--muted);line-height:1.75;border-left:2px solid var(--line);padding-left:10px;margin:8px 0}
+.btn{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:var(--paper);border-radius:8px;padding:4px 14px;font-size:13px;text-decoration:none;cursor:pointer;font-family:inherit;line-height:1.7}
+.btn:hover{background:var(--paper-dim)}
+figure{margin:14px 0 6px}
+figcaption{font-size:12.5px;color:var(--muted);line-height:1.6;padding-top:4px}
+svg{max-width:100%;height:auto;display:block}
+table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.6;margin:8px 0}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{font-size:11.5px;letter-spacing:.06em;color:var(--muted);font-weight:500;white-space:nowrap;border-bottom:1.5px solid var(--ink)}
+td.n{font-family:'IBM Plex Mono',Menlo,monospace;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+details{border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:10px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:13.5px}
+/* 問いカード (自己完結 — シート側の判断材料。答える場所は下の .q) */
+.qcard{border:1px solid var(--line);border-left:3px solid var(--red);border-radius:10px;padding:12px 16px;margin:12px 0}
+.qcard .qt{font-weight:700;margin:0 0 6px}
+.qcard ul{margin:4px 0;padding-left:1.3em}.qcard li{margin:4px 0}
+.rec{font-family:'IBM Plex Mono',Menlo,monospace;font-size:11px;color:var(--red);border:1px solid var(--red);border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
+/* overlay 注記 (赤を画像の上に乗せる部品 — 座標は画像に対する %) */
+.shotwrap{position:relative;line-height:0;margin:8px 0 4px}
+.shotwrap img{width:100%;border:1px solid var(--line);border-radius:8px;display:block}
+.shotwrap .mark{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border:2.5px solid var(--red);border-radius:50%;background:rgba(255,255,255,.78);color:var(--red);font:600 13px/21px 'IBM Plex Mono',Menlo,monospace;text-align:center}
+.shotwrap .lbl{position:absolute;transform:translateX(-50%);background:var(--red);color:#fff;font:700 11px/1.5 sans-serif;padding:2px 8px;border-radius:4px;white-space:nowrap}
+/* A/B 対比 (choice の対立軸を並べる部品) */
+.ab{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ab figure{margin:0}.ab figcaption{font-size:12.5px;color:var(--muted);line-height:1.6;padding-top:4px}
+@media (max-width:640px){.ab{grid-template-columns:1fr}}
+del{color:var(--muted)}
+footer{margin-top:28px;border-top:1px solid var(--line);padding-top:10px}
+
+/* akapin:start */
+/* ---- ヘッダバー (視覚訂正トグル) ---- */
+.akbar{position:sticky;top:0;z-index:20;background:var(--paper);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.akbar .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+#pinToggle{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:4px 12px;font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;line-height:1.7}
+#pinToggle.on{border-color:var(--red);color:var(--red);background:rgba(220,38,38,.06)}
+
+/* ---- シート (赤ピンの座標系の原点) ---- */
+#akSheet.pinmode{cursor:crosshair;outline:2px dashed var(--red);outline-offset:6px}
+#akSheet.pinmode a,#akSheet.pinmode summary,#akSheet.pinmode button{cursor:crosshair}
+.akpin{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font:600 13px/24px 'IBM Plex Mono',Menlo,monospace;text-align:center;box-shadow:0 0 0 2px var(--paper),0 1px 4px rgba(0,0,0,.25);pointer-events:none;z-index:10;user-select:none}
+#akSheet.pinmode .akpin{pointer-events:auto;cursor:pointer}
+.akpin.active{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--red)}
+.akpop{position:absolute;z-index:15;width:280px;max-width:90vw;background:var(--paper);border:1px solid var(--red);border-radius:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.14);cursor:auto;line-height:1.6}
+.akpop .t{font-size:12.5px;color:var(--red);font-weight:600;margin-bottom:4px;font-family:'IBM Plex Mono',Menlo,monospace}
+.akpop textarea{min-height:64px;margin-top:0}
+.akpop .row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.akpop button{font-family:inherit;font-size:12.5px;border-radius:6px;padding:3px 12px;cursor:pointer;line-height:1.7}
+.akpop .save{border:1px solid var(--red);background:var(--red);color:#fff}
+.akpop .del{border:1px solid var(--line);background:var(--paper);color:var(--muted)}
+/* akapin:end */
+
+/* ---- シート ---- */
+#akSheet{position:relative;padding-top:8px}
+
+/* ---- 回答フォーム ---- */
+#akForm{margin-top:36px}
+.q{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0;background:var(--paper)}
+.q label{display:block;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:6px 0;cursor:pointer;line-height:1.7}
+.q label:has(input:checked){border-color:var(--red);background:rgba(220,38,38,.06)}
+.q input[type=radio]{margin:0 8px 0 0;accent-color:#DC2626;vertical-align:-1px}
+.q .opt-d{color:var(--muted);font-size:12.5px;margin:2px 0 0 22px;line-height:1.6}
+/* 選択肢の絵 (.thumb) — 見た目が違う選択肢には、シート本文の .ab / SVG と同じ絵をここにも置く。無彩色枝、選択中はラベルと同じ淡赤 */
+.q label .thumb{display:flex;flex-direction:column;justify-content:center;min-height:120px;margin:8px 0 2px 22px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper-dim)}
+.q label .thumb svg{width:100%;height:150px;max-width:100%}
+.q label .thumb img{display:block;max-width:100%;max-height:160px;margin:0 auto}
+.q label .thumb figcaption{font-size:12px;color:var(--muted);line-height:1.5;padding-top:4px}
+.q label:has(input:checked) .thumb{border-color:var(--red);background:rgba(220,38,38,.04)}
+textarea{width:100%;min-height:54px;margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font-family:inherit;font-size:13.5px;line-height:1.7;resize:vertical}
+textarea:focus{outline:none;border-color:var(--red)}
+.redpen textarea{min-height:110px}
+.clearsel{display:inline-block;margin-top:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+/* akapin:start */
+#pinList{list-style:none;margin:0;padding:0}
+#pinList li{display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid var(--line);padding:6px 0;font-size:13.5px}
+#pinList li:last-child{border-bottom:0}
+#pinList .no{color:var(--red);font-family:'IBM Plex Mono',Menlo,monospace;font-weight:600;white-space:nowrap}
+#pinList .xy{color:var(--muted);font-family:'IBM Plex Mono',Menlo,monospace;font-size:12px;white-space:nowrap}
+#pinList .txt{flex:1;white-space:pre-wrap;word-break:break-word}
+#pinList .ops{white-space:nowrap}
+#pinList .ops a{font-size:12px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline}
+#pinEmpty{color:var(--muted);font-size:12.5px;margin:0}
+/* akapin:end */
+.sendbar{position:sticky;bottom:0;background:linear-gradient(rgba(255,255,255,0),var(--paper) 30%);padding:20px 0 12px;text-align:center}
+#genBtn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:11px 32px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+#genBtn:hover{filter:brightness(.95)}
+.status{margin-top:8px;font-size:12.5px;color:var(--muted);min-height:18px}
+.status.ok{color:var(--ink)}.status.err{color:var(--muted)}
+#out{display:none;font-family:'IBM Plex Mono',Menlo,monospace;font-size:12.5px;min-height:170px;margin-top:10px;text-align:left}
+@media print{.akbar,#akForm{display:none}summary{color:var(--ink)}details{border:none;padding:0}details[open] summary{display:none}}
+</style></head>
+<body><main>
+
+<!-- akapin:start -->
+<div class="akbar">
+  <div class="hint">回答はこのシートの下のフォームへ。シートの上に直接訂正を書きたいときは右のボタンを ON にしてクリック。</div>
+  <button id="pinToggle" type="button" onclick="togglePinMode()" aria-pressed="false">✎ 視覚訂正モード: OFF</button>
+</div>
+<!-- akapin:end -->
+
+<!-- ================= シート (提案領域 = 赤ピンの座標系の原点) ================= -->
+<section id="akSheet">
+
+<div class="kicker">✎ AKAPEN — 2026-11-01</div>
+<h1>ログに「なぜ」はほぼ残っていない。だから、残っている手がかりから推定し、根拠の強さを添えて見せる</h1>
+<div class="concl"><b>結論:</b> Claude Code の会話ログ (JSONL) から、ツール呼び出し 1 回ごとに「なぜそうしたか」を推定する CLI <span class="mono">cc-why</span> を作る。ツール呼び出しの 64% には本人の言葉 (thinking・直前の説明文・Bash の説明) が残っていないので、推定には必ず「根拠の強さ」と「指示元 (どの SKILL.md / CLAUDE.md の何行目がそうさせたか)」を付ける。ハーネスを直す材料になるのは、この指示元と、「読んだのに後で使わなかったファイル」の 2 つ。</div>
+<div class="gl"><b>このシートで使う言葉</b>:<br>
+・<b>ログ</b> — <span class="mono">~/.claude/projects/&lt;プロジェクト&gt;/&lt;セッション&gt;.jsonl</span>。1 行 1 イベントの会話記録。subagent の分は <span class="mono">&lt;セッション&gt;/subagents/</span> に別ファイル<br>
+・<b>セッション</b> — Claude Code を 1 回起動してから終えるまでの会話。ログ 1 本に当たる。8 桁の英数字は ID の先頭<br>
+・<b>ステップ</b> — ツール呼び出し 1 回 (Read 1 回、Bash 1 回…)。分析の 1 行の単位<br>
+・<b>推定</b> — 後から LLM にログを読ませて「この時点でこう考えたはず」と推し量ること。本人の言葉ではない<br>
+・<b>未使用</b> — 読んだファイルの名前・中身が、その後の説明文にもツールの入力にも一度も現れないこと (LLM を使わず機械的に判定)<br>
+・<b>claude -p</b> — Claude Code を画面なしで 1 回だけ動かし、答えを標準出力に返す起動方法<br>
+・<b>attributionSkill</b> — ログの各行に Claude Code が付ける「どの skill の最中か」の欄<br>
+・<b>指示元</b> — そのステップを促した文書の行。例: SKILL.md の「手順 3: rubric を Read」<br>
+・<b>ハーネス</b> — Claude Code を動かす周りの設定一式 (CLAUDE.md・skill・hook・設定ファイル)</div>
+
+<figure>
+<svg viewBox="0 0 720 250" role="img" aria-label="cc-why の処理の流れ: ログ → 抽出 → 推定 → レポート">
+  <style>
+    .bt{font:600 12.5px 'IBM Plex Sans JP',sans-serif;fill:#212529}
+    .bl{font:400 11px 'IBM Plex Sans JP',sans-serif;fill:#64707C}
+    .bm{font:400 10.5px 'IBM Plex Mono',monospace;fill:#64707C}
+    .rd{font:600 11px 'IBM Plex Sans JP',sans-serif;fill:#DC2626}
+    .num{font:600 12px 'IBM Plex Mono',monospace;fill:#DC2626}
+    .box{fill:#F6F8FA;stroke:#DEE2E6;stroke-width:1}
+    .boxr{fill:#FFF5F5;stroke:#DC2626;stroke-width:1.4}
+    .ar{stroke:#64707C;stroke-width:1.2;fill:none;marker-end:url(#a1)}
+  </style>
+  <defs><marker id="a1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64707C"/></marker></defs>
+  <text x="10" y="18" class="bt">図の主張: 決定的に抜き出す部分と、LLM に推し量らせる部分を分ける</text>
+  <rect x="10" y="40" width="150" height="120" rx="6" class="box"/>
+  <text x="22" y="62" class="bt">既存のログ</text>
+  <text x="22" y="82" class="bm">*.jsonl  28 本</text>
+  <text x="22" y="98" class="bm">subagents/*.jsonl</text>
+  <text x="22" y="118" class="bl">本人の言葉あり 36%</text>
+  <text x="22" y="134" class="bl">(thinking・説明文・</text>
+  <text x="22" y="150" class="bl"> Bash の説明の合計)</text>
+  <path d="M160,100 L190,100" class="ar"/>
+  <rect x="195" y="40" width="160" height="120" rx="6" class="box"/>
+  <text x="207" y="62" class="bt">抽出 (LLM なし)</text>
+  <text x="207" y="82" class="bl">ステップごとに手がかりを束ねる:</text>
+  <text x="207" y="98" class="bl">直前の人の依頼 / 直前の結果</text>
+  <text x="207" y="114" class="bl">本文・thinking・Bash 説明</text>
+  <text x="207" y="130" class="bl">どの skill の最中か</text>
+  <text x="207" y="146" class="bl">その後に使われたか</text>
+  <path d="M355,100 L385,100" class="ar"/>
+  <rect x="390" y="40" width="150" height="120" rx="6" class="boxr"/>
+  <text x="402" y="62" class="rd">意図の推定</text>
+  <text x="402" y="82" class="bl">LLM が 1 セッション分を</text>
+  <text x="402" y="98" class="bl">まとめて読み、各ステップに</text>
+  <text x="402" y="114" class="bl">「なぜ」+ 根拠の強さ</text>
+  <text x="402" y="130" class="bl">+ 指示元 を付ける</text>
+    <circle cx="526" cy="146" r="11" fill="#fff" stroke="#DC2626" stroke-width="2"/><text x="522" y="150" class="num">3</text>
+  <path d="M540,100 L570,100" class="ar"/>
+  <rect x="575" y="40" width="135" height="120" rx="6" class="boxr"/>
+  <text x="587" y="62" class="rd">HTML レポート</text>
+  <text x="587" y="82" class="bl">ブラウザで開く 1 枚</text>
+  <text x="587" y="98" class="bl">見せ方は問 2</text>
+  <circle cx="696" cy="52" r="11" fill="#fff" stroke="#DC2626" stroke-width="2"/><text x="692" y="56" class="num">2</text>
+  <rect x="195" y="180" width="345" height="56" rx="6" fill="#fff" stroke="#DC2626" stroke-dasharray="4 3"/>
+  <text x="207" y="200" class="rd">(任意) 今後のログに本人の言葉を足す</text>
+  <text x="207" y="220" class="bl">CLAUDE.md で「ツールの前に意図を 1 行書く」— 問 1</text>
+  <path d="M367,180 L367,162" class="ar"/>
+  <circle cx="526" cy="192" r="11" fill="#fff" stroke="#DC2626" stroke-width="2"/><text x="522" y="196" class="num">1</text>
+</svg>
+<figcaption>図 1 — 何を見るか: 灰色は今あるもの、赤は新しく作るもの。赤丸の数字は、その部分を決める問いの番号 (1 = 点線の箱、2 = レポート、3 = 推定)。抽出は LLM を使わないので、何度回しても同じ結果になる。</figcaption>
+</figure>
+
+<h2>ログに残る手がかりは 4 種類。どれも欠けがちなので、強さを明示する</h2>
+<p>手元のログ 28 本 (セッション 15 本 + subagent 13 本) を数えると、ツール呼び出し 517 回のうち、本人の言葉が添っていたのは 188 回 (36%)。内訳を見ると thinking はほぼ空で、中身が読めたのは 284 個中 10 個だけ。ログの各行には <span class="mono">"thinkingDisplay":"updates"</span> と記録されていて、要約表示の設定では中身を保存しないと見られる (設定との関係はまだ確かめていない)。</p>
+<p>そこで推定には <span class="red">根拠の強さ 3 段階</span> を必ず付ける。<b>強</b> = 本人の言葉 (thinking・直前の本文・Bash の説明) がある。<b>中</b> = 直前の結果や SKILL.md の文に「これを読め」とある。<b>弱</b> = 流れからの推測だけ。ハーネスを直す判断は「強・中」だけで行い、「弱」は参考に留める。</p>
+
+<p>下は、実際のログ (cognitive-ease-html の skill を使った 10/31 のセッション) の 5 ステップを、このツールで見るとどうなるかの再現。時刻・ツール・対象ファイルは実ログのまま。推定文・根拠・指示元・⚑ は説明用の例。</p>
+<figure>
+<svg viewBox="0 0 720 268" role="img" aria-label="1 セッションのタイムライン表示の例">
+  <style>
+    .h{font:600 11px 'IBM Plex Sans JP',sans-serif;fill:#64707C}
+    .t{font:400 11px 'IBM Plex Mono',monospace;fill:#64707C}
+    .tool{font:600 11.5px 'IBM Plex Mono',monospace;fill:#212529}
+    .w{font:400 11.5px 'IBM Plex Sans JP',sans-serif;fill:#212529}
+    .wr{font:600 11px 'IBM Plex Sans JP',sans-serif;fill:#DC2626}
+    .g{font:600 10px 'IBM Plex Sans JP',sans-serif}
+  </style>
+  <text x="10" y="16" class="h">セッション 34383e9e · skill: cognitive-ease-html · 依頼「この記事を図解 HTML に」</text>
+  <line x1="10" y1="26" x2="710" y2="26" stroke="#212529" stroke-width="1.2"/>
+  <text x="10" y="42" class="h">時刻</text><text x="70" y="42" class="h">ツール</text><text x="190" y="42" class="h">なぜ (推定)</text><text x="560" y="42" class="h">根拠</text><text x="610" y="42" class="h">指示元</text>
+  <g>
+    <line x1="10" y1="50" x2="710" y2="50" stroke="#DEE2E6"/>
+    <text x="10" y="70" class="t">05:08:17</text><text x="70" y="70" class="tool">ToolSearch</text>
+    <text x="190" y="70" class="w">記事を取りに行く WebFetch が未ロードだった</text>
+    <rect x="560" y="59" width="22" height="16" rx="3" fill="#F6F8FA" stroke="#64707C"/><text x="565" y="71" class="g" fill="#64707C">中</text>
+    <text x="610" y="70" class="t">—</text>
+    <line x1="10" y1="82" x2="710" y2="82" stroke="#DEE2E6"/>
+    <text x="10" y="102" class="t">05:08:18</text><text x="70" y="102" class="tool">Bash ls -R</text>
+    <text x="190" y="102" class="w">skill の assets に何があるか先に把握</text>
+    <rect x="560" y="91" width="22" height="16" rx="3" fill="#212529"/><text x="565" y="103" class="g" fill="#fff">強</text>
+    <text x="610" y="102" class="t">SKILL.md:12</text>
+    <line x1="10" y1="114" x2="710" y2="114" stroke="#DEE2E6"/>
+    <text x="10" y="134" class="t">05:08:22</text><text x="70" y="134" class="tool">WebFetch</text>
+    <text x="190" y="134" class="w">依頼の記事本文を取得</text>
+    <rect x="560" y="123" width="22" height="16" rx="3" fill="#212529"/><text x="565" y="135" class="g" fill="#fff">強</text>
+    <text x="610" y="134" class="t">人の依頼</text>
+    <line x1="10" y1="146" x2="710" y2="146" stroke="#DEE2E6"/>
+    <rect x="10" y="147" width="700" height="32" fill="#FFF5F5"/>
+    <text x="10" y="166" class="t">05:08:48</text><text x="70" y="166" class="tool">Bash cat</text>
+    <text x="190" y="166" class="w">writing-rubric.md を全文読む</text>
+    <text x="360" y="166" class="wr">⚑ 読んだが後で参照なし</text>
+    <rect x="560" y="155" width="22" height="16" rx="3" fill="#fff" stroke="#DEE2E6"/><text x="565" y="167" class="g" fill="#64707C">弱</text>
+    <text x="610" y="166" class="t">SKILL.md:31</text>
+    <line x1="10" y1="179" x2="710" y2="179" stroke="#DEE2E6"/>
+    <text x="10" y="198" class="t">05:09:20</text><text x="70" y="198" class="tool">Write</text>
+    <text x="190" y="198" class="w">design.json に読者と構成を先に書き出す</text>
+    <rect x="560" y="187" width="22" height="16" rx="3" fill="#F6F8FA" stroke="#64707C"/><text x="565" y="199" class="g" fill="#64707C">中</text>
+    <text x="610" y="198" class="t">SKILL.md:40</text>
+    <line x1="10" y1="210" x2="710" y2="210" stroke="#DEE2E6"/>
+  </g>
+  <rect x="10" y="222" width="700" height="38" rx="6" fill="#fff" stroke="#DC2626"/>
+  <text x="22" y="240" class="wr">改善の手がかり (表示の例)</text>
+  <text x="22" y="254" class="w">「SKILL.md の N 行目が毎回このファイルを読ませるが、この回は未使用 → 条件付きにできるか」と出る</text>
+</svg>
+<figcaption>図 2 — 何を見るか: 1 行 = 1 ステップ。右端の「指示元」と、赤い帯の「読んだが後で参照なし」が、ハーネスを直す箇所を指す。推定文・根拠・指示元の行番号は説明用の例 (実装後に実際の推定が入る)。</figcaption>
+</figure>
+
+<h2>作るものの範囲</h2>
+<table>
+<tr><th>部品</th><th>やること</th><th>今回</th></tr>
+<tr><td>抽出</td><td>JSONL を読み、ステップごとに手がかりを束ねた中間 JSON を作る。subagent のログも親のステップにぶら下げる</td><td>作る</td></tr>
+<tr><td>推定</td><td>中間 JSON を LLM に渡し、各ステップに「なぜ・根拠の強さ・指示元」を付ける (エンジンは問 3)</td><td>作る</td></tr>
+<tr><td>レポート</td><td>HTML 1 枚 (見せ方は問 2)</td><td>作る</td></tr>
+<tr><td>今後の記録を足す</td><td>CLAUDE.md に意図を書かせる指示 (問 1 で決める)</td><td class="red">問 1</td></tr>
+<tr><td>改善案の自動作成</td><td>SKILL.md の書き換え案まで出す</td><td>作らない (人が判断)</td></tr>
+</table>
+
+<h2>決めてほしいこと (3 問 — 未回答は推奨で進める)</h2>
+
+<div class="qcard"><p class="qt">問 1. 「なぜ」の出どころを、過去ログからの推定だけにするか、今後のログに本人の言葉を足すか</p>
+<div class="ab">
+<figure><svg viewBox="0 0 300 110" role="img" aria-label="A: 推定だけ"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A. 推定だけ — 今後のレポート</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Read  SKILL.md を確認(推定)   中</text><rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">Bash  テスト実行(推定)        弱</text><rect x="8" y="74" width="284" height="20" fill="#F6F8FA"/><text x="14" y="88">Edit  型エラー修正(本人)      強</text></g><text x="8" y="106" style="font:400 9.5px sans-serif;fill:#64707C">強・中・弱が混ざる (今と同じ)</text></svg><figcaption>A — Claude の出力は今のまま</figcaption></figure>
+<figure><svg viewBox="0 0 300 110" role="img" aria-label="B: 本人の言葉を足す"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">B. 意図を 1 行書かせる — ターミナル</text><g style="font:400 9.5px monospace;fill:#212529"><text x="14" y="38" fill="#DC2626">意図: 手順 3 の rubric を確認する</text><text x="14" y="52">● Read(SKILL.md)</text><text x="14" y="70" fill="#DC2626">意図: 直したので型チェックを回す</text><text x="14" y="84">● Bash(npx tsc)</text></g><text x="8" y="106" style="font:400 9.5px sans-serif;fill:#64707C">赤の行が毎回増え、レポートは「強」が並ぶ</text></svg><figcaption>B — 赤の 1 行がツールの前に毎回出る</figcaption></figure>
+</div>
+<ul>
+<li><b>A. 推定だけ (過去ログ 28 本をそのまま使う)</b><span class="rec">推奨</span> — 利点: 今すぐ全ログで動き、Claude の振る舞いを一切変えない。代償: 本人の言葉は 36% だけで、残り 64% は推し量った理由になる。</li>
+<li>B. 推定 + 今後は CLAUDE.md で「ツールの前に意図を 1 行書く」と指示 — 利点: これからのログは根拠「強」がほぼ全ステップに付く。代償: 書かせる指示そのものが Claude の動き方を変えるので、「普段の動き」の分析ではなくなる。ターミナルの出力が毎回 1 行増える。</li>
+</ul>
+<p class="m">根拠: 実行結果 — <span class="mono">~/.claude/projects/*/*.jsonl</span> と <span class="mono">*/*/subagents/*.jsonl</span> を python で走査し、<span class="mono">type=assistant</span> の行のツール呼び出しを数えた: 517 回中、前に本人の言葉あり 188 回 (36%)。Bash 256 回中、引数 <span class="mono">description</span> (コマンドの説明) あり 158 回。hook はツールの入力しか受け取れず、理由を書き足せるのは Claude 自身だけなので、足す手段は CLAUDE.md の指示になる。</p>
+</div>
+
+<div class="qcard"><p class="qt">問 2. レポートは、1 セッションを順に追う形か、全セッションを束ねた集計か</p>
+<div class="ab">
+<figure><svg viewBox="0 0 300 150" role="img" aria-label="タイムライン">
+<text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A. 1 セッションのタイムライン</text>
+<g style="font:400 9.5px monospace;fill:#64707C">
+<rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">05:08 Bash  assets を把握    強</text>
+<rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">05:08 Fetch 記事を取得       強</text>
+<rect x="8" y="74" width="284" height="20" fill="#FFF5F5" stroke="#DC2626"/><text x="14" y="88" fill="#DC2626">05:08 cat   rubric ⚑未使用   弱</text>
+<rect x="8" y="98" width="284" height="20" fill="#F6F8FA"/><text x="14" y="112">05:09 Write design.json     中</text>
+</g>
+<text x="8" y="138" style="font:400 9.5px sans-serif;fill:#64707C">1 回の作業の流れと「なぜ」を順に読む</text>
+</svg><figcaption>A — 流れが分かる。1 回の失敗を深掘りする時に強い</figcaption></figure>
+<figure><svg viewBox="0 0 300 150" role="img" aria-label="横断集計">
+<text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">B. 全セッションの集計</text>
+<g style="font:400 9.5px sans-serif;fill:#212529">
+<text x="8" y="38">指示元ごとの「読んだが未使用」</text>
+<rect x="8" y="46" width="150" height="12" fill="#DC2626"/><text x="164" y="56" style="font:400 9px monospace;fill:#64707C">rubric.md 7/9</text>
+<rect x="8" y="62" width="80" height="12" fill="#DEE2E6"/><text x="94" y="72" style="font:400 9px monospace;fill:#64707C">README 3/12</text>
+<rect x="8" y="78" width="40" height="12" fill="#DEE2E6"/><text x="54" y="88" style="font:400 9px monospace;fill:#64707C">deck.json 1/5</text>
+<text x="8" y="112">skill 別のツール回数・根拠「弱」の割合</text>
+</g>
+<text x="8" y="138" style="font:400 9.5px sans-serif;fill:#64707C">数字は形の例。どこを直すと効くかを順位で見る</text>
+</svg><figcaption>B — 直す優先順位が分かる。たまたま 1 回の例外に引っ張られない</figcaption></figure>
+</div>
+<ul>
+<li><b>A. タイムラインを先に作り、集計は次の段階</b><span class="rec">推奨</span> — 利点: 推定が正しいかを人が 1 行ずつ確かめられる。推定の質が見えてから集計に進める。代償: 「どこを直すと一番効くか」は人が複数セッションを見比べて探す。</li>
+<li>B. 集計を先に作る — 利点: 28 本を一度に見て、繰り返し起きる無駄 (同じ指示元で何度も未使用) がすぐ順位で出る。代償: 推定が間違っていても数字に埋もれて気付きにくい。</li>
+</ul>
+<p class="m">根拠: 実行結果 — 同じ走査で、ログの行を <span class="mono">attributionSkill</span> の値ごとに数えた: run-workshop-deck 175 行 / akapen 45 / cognitive-ease-html 27 / html-plan 24。1 skill でログが数十〜百数十行になるので、タイムラインは skill で絞り込める形にする。</p>
+</div>
+
+<div class="qcard"><p class="qt">問 3. 推定に使う LLM をどう呼ぶか</p>
+<div class="ab">
+<figure><svg viewBox="0 0 300 100" role="img" aria-label="A・B: 推定あり"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A・B — 「なぜ」が全行に入る</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Bash  assets を把握       強</text><rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">cat   rubric を確認(推定) 弱</text></g><text x="8" y="90" style="font:400 9.5px sans-serif;fill:#64707C">A と B は同じ指示文・同じ出力の形</text></svg><figcaption>A・B — 違いは速さと費用だけ</figcaption></figure>
+<figure><svg viewBox="0 0 300 100" role="img" aria-label="C: LLM なし"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">C — 本人の言葉がある行だけ埋まる</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Bash  "List skill assets"  強</text><rect x="8" y="50" width="284" height="20" fill="#fff" stroke="#DEE2E6" stroke-dasharray="3 2"/><text x="14" y="64">cat   (空欄)               —</text></g><text x="8" y="90" style="font:400 9.5px sans-serif;fill:#64707C">64% の行が空欄。読んで推し量るのは人</text></svg><figcaption>C — 説明文をそのまま並べるだけ</figcaption></figure>
+</div>
+<ul>
+<li><b>A. <span class="mono">claude -p</span> (ヘッドレスの Claude Code) を呼ぶ</b><span class="rec">推奨</span> — 利点: API キー不要で、今使っている Claude のプランのまま動く。使うモデルも Claude Code の設定に従う。代償: 1 セッションずつ順に回すので、28 本全部だと数十分かかる見込み。推定を走らせた分も新しいログとして残るので、cc-why が自分の実行を見分けて分析から外す。</li>
+<li>B. Anthropic API を直接呼ぶ (<span class="mono">ANTHROPIC_API_KEY</span>) — 利点: 並列に回せて、28 本でも数分。失敗時の再実行や出力の検査を細かく制御しやすい。代償: API キーと使った分の課金が別に要る。</li>
+<li>C. LLM を使わない (抽出した手がかりを並べるだけ) — 利点: 無料・一瞬・毎回同じ結果。「強」の根拠はそのまま読める。代償: 本人の言葉の無い 64% のステップは「なぜ」が空欄のまま。人が読んで推し量る。</li>
+</ul>
+<p class="m">根拠: ログ全体は <span class="mono">du -sh ~/.claude/projects</span> = 103M。1 本最大 12MB (<span class="mono">33126d3e-6636-4a33-a596-b429bcd8b6d1.jsonl</span>) で、そのまま LLM に入らない。抽出で手がかりだけに絞ってから渡す前提。</p>
+</div>
+
+<details><summary>落とした案 2 つと、作り方の前提 (箇条 6 行)</summary>
+<p class="m">
+・落とした案: <b>hook (ツール実行前に動くもの) で毎回理由を記録</b> — hook はツールの入力しか見えず、Claude の理由は受け取れない。<br>
+・落とした案: <b>thinking を全文保存する設定に変えてから分析</b> — 過去ログには効かない。設定の可否は別途調べる (問 1 の B と同じく「今後」の話)。<br>
+・実装言語: このリポジトリに合わせて TypeScript (<span class="mono">package.json</span> の devDependencies に <span class="mono">"typescript": "^5.7.0"</span>)。依存は増やさない。<br>
+・ログの形は Claude Code の版で変わる (ログの <span class="mono">version</span> 欄 = 2.1.296)。知らない種類の行は捨てずに「不明」として数える。<br>
+・手元の 28 本では、Claude が自分で skill を呼んだ記録 (Skill ツールの呼び出し) は 0 回で、skill はすべて人が <span class="mono">/名前</span> で起動している。「なぜ skill を使ったか」は、人が起動したのか Claude が選んだのかをまず分けて表示する。<br>
+・ログには会話の全文が入る。レポートはローカルの HTML に留め、外部に送らない (問 3 の A/B では LLM に送る範囲を手がかりに絞る)。
+</p>
+</details>
+
+<footer class="m">出所: <span class="mono">~/.claude/projects/</span> 配下の JSONL 28 本を python で集計した実測 (2026-11-01)。図 2 は 34383e9e セッションの実ステップ。回答は下のフォームから。未回答の問は推奨案で確定する。</footer>
+
+</section>
+<!-- ================= シートここまで ================= -->
+
+<!-- ================= 回答フォーム ================= -->
+<section id="akForm">
+<h2>回答 (未回答 = お任せ = 推奨案で確定)</h2>
+<p class="m">上の問いカードを見て選ぶ。迷う問いは未選択のままでよい。書き終えたら一番下の [貼り付ける文章を作る] を押し、出たテキストを Claude Code のターミナルに貼って Enter。</p>
+
+<div class="q" data-qid="q1">
+  <h3>Q1. 「なぜ」の出どころ — 推定だけか、今後のログに本人の言葉を足すか</h3>
+  <label><input type="radio" name="q1" value="A"><b>A. 推定だけ (過去ログ 28 本をそのまま使う)</b><span class="rec">推奨</span>
+    <div class="opt-d">Claude の振る舞いは変えない。本人の言葉があるのは 36%、残り 64% は推し量った理由</div>
+    <figure class="thumb"><svg viewBox="0 0 300 110" role="img" aria-label="A: 推定だけ"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A. 推定だけ — 今後のレポート</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Read  SKILL.md を確認(推定)   中</text><rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">Bash  テスト実行(推定)        弱</text><rect x="8" y="74" width="284" height="20" fill="#F6F8FA"/><text x="14" y="88">Edit  型エラー修正(本人)      強</text></g><text x="8" y="106" style="font:400 9.5px sans-serif;fill:#64707C">強・中・弱が混ざる (今と同じ)</text></svg></figure></label>
+  <label><input type="radio" name="q1" value="B"><b>B. 推定 + 今後は CLAUDE.md で意図を 1 行書かせる</b>
+    <div class="opt-d">これからのログは根拠「強」が増える。書かせること自体が行動を変え、出力も増える</div>
+    <figure class="thumb"><svg viewBox="0 0 300 110" role="img" aria-label="B: 本人の言葉を足す"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">B. 意図を 1 行書かせる — ターミナル</text><g style="font:400 9.5px monospace;fill:#212529"><text x="14" y="38" fill="#DC2626">意図: 手順 3 の rubric を確認する</text><text x="14" y="52">● Read(SKILL.md)</text><text x="14" y="70" fill="#DC2626">意図: 直したので型チェックを回す</text><text x="14" y="84">● Bash(npx tsc)</text></g><text x="8" y="106" style="font:400 9.5px sans-serif;fill:#64707C">赤の行が毎回増え、レポートは「強」が並ぶ</text></svg></figure></label>
+  <textarea name="q1_note" placeholder="補足 (任意)"></textarea>
+</div>
+
+<div class="q" data-qid="q2">
+  <h3>Q2. レポートの見せ方 — 1 セッションのタイムラインか、全セッションの集計か</h3>
+  <label><input type="radio" name="q2" value="A"><b>A. タイムラインを先に、集計は次の段階</b><span class="rec">推奨</span>
+    <div class="opt-d">推定が正しいかを 1 行ずつ確かめられる。直す優先順位は人が見比べて探す</div>
+    <figure class="thumb"><svg viewBox="0 0 300 150" role="img" aria-label="タイムライン">
+<text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A. 1 セッションのタイムライン</text>
+<g style="font:400 9.5px monospace;fill:#64707C">
+<rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">05:08 Bash  assets を把握    強</text>
+<rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">05:08 Fetch 記事を取得       強</text>
+<rect x="8" y="74" width="284" height="20" fill="#FFF5F5" stroke="#DC2626"/><text x="14" y="88" fill="#DC2626">05:08 cat   rubric ⚑未使用   弱</text>
+<rect x="8" y="98" width="284" height="20" fill="#F6F8FA"/><text x="14" y="112">05:09 Write design.json     中</text>
+</g>
+<text x="8" y="138" style="font:400 9.5px sans-serif;fill:#64707C">1 回の作業の流れと「なぜ」を順に読む</text>
+</svg></figure></label>
+  <label><input type="radio" name="q2" value="B"><b>B. 集計を先に作る</b>
+    <div class="opt-d">繰り返し起きる無駄が順位ですぐ出る。推定の誤りは数字に埋もれやすい</div>
+    <figure class="thumb"><svg viewBox="0 0 300 150" role="img" aria-label="横断集計">
+<text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">B. 全セッションの集計</text>
+<g style="font:400 9.5px sans-serif;fill:#212529">
+<text x="8" y="38">指示元ごとの「読んだが未使用」</text>
+<rect x="8" y="46" width="150" height="12" fill="#DC2626"/><text x="164" y="56" style="font:400 9px monospace;fill:#64707C">rubric.md 7/9</text>
+<rect x="8" y="62" width="80" height="12" fill="#DEE2E6"/><text x="94" y="72" style="font:400 9px monospace;fill:#64707C">README 3/12</text>
+<rect x="8" y="78" width="40" height="12" fill="#DEE2E6"/><text x="54" y="88" style="font:400 9px monospace;fill:#64707C">deck.json 1/5</text>
+<text x="8" y="112">skill 別のツール回数・根拠「弱」の割合</text>
+</g>
+<text x="8" y="138" style="font:400 9.5px sans-serif;fill:#64707C">数字は形の例。どこを直すと効くかを順位で見る</text>
+</svg></figure></label>
+  <textarea name="q2_note" placeholder="補足 (任意)"></textarea>
+</div>
+
+<div class="q" data-qid="q3">
+  <h3>Q3. 推定に使う LLM の呼び方</h3>
+  <label><input type="radio" name="q3" value="A"><b>A. claude -p (ヘッドレスの Claude Code)</b><span class="rec">推奨</span>
+    <div class="opt-d">API キー不要・今のプランのまま。遅め。推定の実行もログに残るが、cc-why が自分で除外する</div>
+    <figure class="thumb"><svg viewBox="0 0 300 100" role="img" aria-label="A・B: 推定あり"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A・B — 「なぜ」が全行に入る</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Bash  assets を把握       強</text><rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">cat   rubric を確認(推定) 弱</text></g><text x="8" y="90" style="font:400 9.5px sans-serif;fill:#64707C">A と B は同じ指示文・同じ出力の形</text></svg></figure></label>
+  <label><input type="radio" name="q3" value="B"><b>B. Anthropic API を直接</b>
+    <div class="opt-d">並列で速く、失敗時の再実行を細かく制御しやすい。API キーと従量課金が別に要る</div>
+    <figure class="thumb"><svg viewBox="0 0 300 100" role="img" aria-label="A・B: 推定あり"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">A・B — 「なぜ」が全行に入る</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Bash  assets を把握       強</text><rect x="8" y="50" width="284" height="20" fill="#F6F8FA"/><text x="14" y="64">cat   rubric を確認(推定) 弱</text></g><text x="8" y="90" style="font:400 9.5px sans-serif;fill:#64707C">A と B は同じ指示文・同じ出力の形</text></svg></figure></label>
+  <label><input type="radio" name="q3" value="C"><b>C. LLM を使わない (手がかりを並べるだけ)</b>
+    <div class="opt-d">無料・一瞬・毎回同じ。本人の言葉の無い 64% は「なぜ」が空欄</div>
+    <figure class="thumb"><svg viewBox="0 0 300 100" role="img" aria-label="C: LLM なし"><text x="8" y="16" style="font:600 11px sans-serif;fill:#212529">C — 本人の言葉がある行だけ埋まる</text><g style="font:400 9.5px monospace;fill:#64707C"><rect x="8" y="26" width="284" height="20" fill="#F6F8FA"/><text x="14" y="40">Bash  "List skill assets"  強</text><rect x="8" y="50" width="284" height="20" fill="#fff" stroke="#DEE2E6" stroke-dasharray="3 2"/><text x="14" y="64">cat   (空欄)               —</text></g><text x="8" y="90" style="font:400 9.5px sans-serif;fill:#64707C">64% の行が空欄。読んで推し量るのは人</text></svg></figure></label>
+  <textarea name="q3_note" placeholder="補足 (任意)"></textarea>
+</div>
+
+<!-- akapin:start -->
+<h2>シートへの赤ピン</h2>
+<div class="q" id="pinBox">
+  <p class="m" style="margin-top:0">上のボタンで「✎ 視覚訂正モード」を ON にし、シートの上の直したい場所をクリックすると赤① が置かれる。その場で訂正文を書く。場所は目安で、訂正の正は本文。</p>
+  <p id="pinEmpty">まだピンはありません。</p>
+  <ul id="pinList"></ul>
+</div>
+<!-- akapin:end -->
+
+<h2>全体への赤ペン</h2>
+<div class="q redpen">
+  <p class="m" style="margin-top:0">訂正・追加要望・「そもそも」の指摘はここへ。複数行でよい。</p>
+  <textarea name="global_note" placeholder=""></textarea>
+</div>
+
+<div class="sendbar">
+  <button id="genBtn" type="button" onclick="generatePrompt()">貼り付ける文章を作る</button>
+  <div id="status" class="status"></div>
+  <textarea id="out" readonly onclick="this.select()"></textarea>
+</div>
+</section>
+
+</main>
+<script>
+// TODO: 質問 id → 見出し (回答プロンプトの行になる。.q の radio name と同期)
+var QUESTIONS = {
+  q1: "Q1. なぜの出どころ (推定だけ / 今後は本人の言葉も)",
+  q2: "Q2. レポートの見せ方 (タイムライン / 集計)",
+  q3: "Q3. 推定に使う LLM の呼び方"
+};
+// TODO: シートごとに一意な固定キー (例: "akapen-settings-01")。使い回すと別のシートの下書きが復元される
+var DRAFT_KEY = "akapen-cc-why-01";
+// TODO: 回答プロンプトの見出しに入るラベル (例: "settings-01")
+var DOC = "cc-why-01";
+
+/* ---------- 下書き (radio・textarea・ピン) ---------- */
+function saveDraft() {
+  try {
+    var d = {};
+    /* akapin:start */
+    d.pins = PINS.map(function (p) { return { x: p.x, y: p.y, note: p.note }; });
+    /* akapin:end */
+    document.querySelectorAll("#akForm input[type=radio]:checked").forEach(function (el) { d[el.name] = el.value; });
+    document.querySelectorAll("#akForm textarea").forEach(function (el) {
+      if (el.id !== "out" && el.name && el.value) d[el.name] = el.value;
+    });
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch (e) {}
+}
+function loadDraft() {
+  try {
+    var d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}");
+    Object.keys(d).forEach(function (k) {
+      if (k === "pins") return;   // 別部品の下書き (部品が無ければ無視)
+      try {
+        // radio の値は英数のみ。textarea の値 (改行や引用符入り) をセレクタに埋め込まない
+        if (!/_note$/.test(k) && k !== "global_note" && /^[A-Za-z0-9]+$/.test(String(d[k]))) {
+          var r = document.querySelector('#akForm input[name="' + k + '"][value="' + d[k] + '"]');
+          if (r) { r.checked = true; return; }
+        }
+        var t = document.querySelector('#akForm textarea[name="' + k + '"]');
+        if (t) t.value = d[k];
+      } catch (e) {}
+    });
+    /* akapin:start */
+    if (Array.isArray(d.pins)) {
+      d.pins.forEach(function (p) {
+        if (typeof p.x === "number" && typeof p.y === "number") addPin(p.x, p.y, String(p.note || ""), true);
+      });
+      renderPins();
+    }
+    /* akapin:end */
+  } catch (e) {}
+}
+document.getElementById("akForm").addEventListener("change", saveDraft);
+document.getElementById("akForm").addEventListener("input", saveDraft);
+
+// 各質問に「選択を解除」を付ける (誤クリックの取り消し = お任せに戻す)
+document.querySelectorAll("#akForm .q[data-qid]").forEach(function (q) {
+  var radios = q.querySelectorAll("input[type=radio]");
+  if (!radios.length) return;
+  var a = document.createElement("a");
+  a.textContent = "選択を解除 (お任せに戻す)";
+  a.className = "clearsel";
+  a.onclick = function () { radios.forEach(function (r) { r.checked = false; }); saveDraft(); };
+  q.appendChild(a);
+});
+
+/* akapin:start */
+/* ---------- 赤ピン (視覚訂正) ---------- */
+var PINS = [];            // [{ x, y, note, el }] — x/y は #akSheet 左上原点の % (整数)
+var PIN_MODE = false;
+var SHEET = document.getElementById("akSheet");
+var POP = null;           // 開いているポップオーバー { el, pin }
+
+function circled(n) {
+  // ①〜⑳ / ㉑〜㉟ / ㊱〜㊿。それ以上は (n)
+  if (n >= 1 && n <= 20) return String.fromCharCode(0x2460 + n - 1);
+  if (n >= 21 && n <= 35) return String.fromCharCode(0x3251 + n - 21);
+  if (n >= 36 && n <= 50) return String.fromCharCode(0x32B1 + n - 36);
+  return "(" + n + ")";
+}
+function togglePinMode(force) {
+  PIN_MODE = (typeof force === "boolean") ? force : !PIN_MODE;
+  var b = document.getElementById("pinToggle");
+  SHEET.classList.toggle("pinmode", PIN_MODE);
+  b.classList.toggle("on", PIN_MODE);
+  b.setAttribute("aria-pressed", PIN_MODE ? "true" : "false");
+  b.textContent = PIN_MODE ? "✎ 視覚訂正モード: ON — シートの上をクリック" : "✎ 視覚訂正モード: OFF";
+  if (!PIN_MODE) closePop();
+}
+function addPin(x, y, note, silent) {
+  var el = document.createElement("div");
+  el.className = "akpin";
+  var pin = { x: x, y: y, note: note || "", el: el };
+  el.style.left = x + "%";
+  el.style.top = y + "%";
+  el.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    if (PIN_MODE) openPop(pin);
+  });
+  SHEET.appendChild(el);
+  PINS.push(pin);
+  if (!silent) { renderPins(); saveDraft(); }
+  return pin;
+}
+function removePin(pin) {
+  var i = PINS.indexOf(pin);
+  if (i < 0) return;
+  if (POP && POP.pin === pin) closePop();
+  pin.el.remove();
+  PINS.splice(i, 1);
+  renderPins();
+  saveDraft();
+}
+function pinIndex(pin) { return PINS.indexOf(pin) + 1; }
+function renderPins() {
+  PINS.forEach(function (p, i) { p.el.textContent = String(i + 1); p.el.title = "赤" + circled(i + 1) + " " + p.note; });
+  var ul = document.getElementById("pinList");
+  var empty = document.getElementById("pinEmpty");
+  ul.innerHTML = "";
+  empty.style.display = PINS.length ? "none" : "";
+  PINS.forEach(function (p, i) {
+    var li = document.createElement("li");
+    var no = document.createElement("span"); no.className = "no"; no.textContent = "赤" + circled(i + 1);
+    var xy = document.createElement("span"); xy.className = "xy"; xy.textContent = "(x" + p.x + "% · y" + p.y + "%)";
+    var tx = document.createElement("span"); tx.className = "txt"; tx.textContent = p.note || "(本文なし)";
+    var ops = document.createElement("span"); ops.className = "ops";
+    var ed = document.createElement("a"); ed.textContent = "編集";
+    ed.onclick = function () { togglePinMode(true); p.el.scrollIntoView({ block: "center" }); openPop(p); };
+    var dl = document.createElement("a"); dl.textContent = "削除";
+    dl.onclick = function () { removePin(p); };
+    ops.appendChild(ed); ops.appendChild(dl);
+    li.appendChild(no); li.appendChild(xy); li.appendChild(tx); li.appendChild(ops);
+    ul.appendChild(li);
+  });
+}
+function openPop(pin) {
+  closePop();
+  PINS.forEach(function (p) { p.el.classList.remove("active"); });
+  pin.el.classList.add("active");
+  var pop = document.createElement("div");
+  pop.className = "akpop";
+  // ピンの右下に出す。右端にかかるときは左側へ
+  var left = pin.x + (pin.x > 60 ? -2 : 2), top = pin.y;
+  pop.style.left = left + "%";
+  pop.style.top = "calc(" + top + "% + 14px)";
+  if (pin.x > 60) pop.style.transform = "translateX(-100%)";
+  var t = document.createElement("div"); t.className = "t";
+  t.textContent = "赤" + circled(pinIndex(pin)) + " (x" + pin.x + "% · y" + pin.y + "%)";
+  var ta = document.createElement("textarea");
+  ta.placeholder = "ここをどう直すか (空のまま保存すると削除)";
+  ta.value = pin.note;
+  var row = document.createElement("div"); row.className = "row";
+  var del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "削除";
+  del.onclick = function (ev) { ev.stopPropagation(); removePin(pin); };
+  var save = document.createElement("button"); save.type = "button"; save.className = "save"; save.textContent = "保存";
+  save.onclick = function (ev) {
+    ev.stopPropagation();
+    var v = ta.value.trim();
+    if (!v) { removePin(pin); return; }
+    pin.note = v;
+    closePop();
+    renderPins();
+    saveDraft();
+  };
+  ta.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") { ev.preventDefault(); save.onclick(ev); }
+    if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); save.onclick(ev); }
+  });
+  pop.addEventListener("click", function (ev) { ev.stopPropagation(); });
+  pop.addEventListener("mousedown", function (ev) { ev.stopPropagation(); });
+  row.appendChild(del); row.appendChild(save);
+  pop.appendChild(t); pop.appendChild(ta); pop.appendChild(row);
+  SHEET.appendChild(pop);
+  POP = { el: pop, pin: pin, ta: ta };
+  ta.focus();
+}
+function closePop() {
+  if (!POP) return;
+  // 閉じるときも本文を拾う (クリックで外へ出たときの取りこぼし防止)
+  var v = POP.ta.value.trim();
+  var pin = POP.pin;
+  POP.el.remove();
+  POP = null;
+  pin.el.classList.remove("active");
+  if (!v) { removePin(pin); return; }
+  if (v !== pin.note) { pin.note = v; renderPins(); saveDraft(); }
+}
+SHEET.addEventListener("click", function (ev) {
+  if (!PIN_MODE) return;
+  // ピンモード中はリンク・summary の標準の動作を止める (details の開閉でシートの高さが変わり、ピンがずれる)
+  ev.preventDefault();
+  if (POP) { closePop(); return; }   // 開いているポップオーバーはまず閉じる
+  var r = SHEET.getBoundingClientRect();
+  var x = Math.round((ev.clientX - r.left) / r.width * 100);
+  var y = Math.round((ev.clientY - r.top) / r.height * 100);
+  x = Math.max(0, Math.min(100, x)); y = Math.max(0, Math.min(100, y));
+  var pin = addPin(x, y, "");
+  openPop(pin);
+});
+/* akapin:end */
+
+/* ---------- 回答プロンプト (references/reply-format.md の固定形) ---------- */
+function oneLine(s) { return s.trim().replace(/\s*\n\s*/g, " "); }
+function buildPrompt() {
+  var lines = ["【赤ペン回答】" + DOC];
+  /* akapin:start */
+  // 赤ピン (ある時だけ、Q 行より先)
+  PINS.forEach(function (p, i) {
+    if (!p.note.trim()) return;
+    lines.push("赤" + circled(i + 1) + " (x" + p.x + "% · y" + p.y + "%) " + oneLine(p.note));
+  });
+  /* akapin:end */
+  Object.keys(QUESTIONS).forEach(function (qid) {
+    var choiceEl = document.querySelector('#akForm input[name="' + qid + '"]:checked');
+    var noteEl = document.querySelector('#akForm textarea[name="' + qid + '_note"]');
+    var note = noteEl ? noteEl.value.trim() : "";
+    var line = QUESTIONS[qid] + ": ";
+    if (choiceEl) {
+      var lab = choiceEl.closest("label");
+      var b = lab ? lab.querySelector("b") : null;
+      var lbl = b ? b.innerText.trim() : "";
+      // 太字が "A. 選択肢" 形式なら先頭の記号を剥がす (A — A. の重複防止)
+      lbl = lbl.replace(new RegExp("^" + choiceEl.value + "[.．]\\s*"), "");
+      line += choiceEl.value + " — " + (lbl || choiceEl.value);
+    } else {
+      line += "(未選択 = お任せ)";
+    }
+    if (note) line += " / 補足: " + oneLine(note);
+    lines.push(line);
+  });
+  var g = document.querySelector('#akForm textarea[name="global_note"]');
+  var gv = g ? g.value.trim() : "";
+  lines.push("全体への赤ペン: " + (gv || "(なし)"));
+  lines.push("---");
+  lines.push("上の回答を反映して作業を続けてください。お任せの項目は推奨案で確定してください。");
+  return lines.join("\n");
+}
+function generatePrompt() {
+  /* akapin:start */
+  closePop();
+  /* akapin:end */
+  var text = buildPrompt();
+  /* akrelay:start */
+  if (RELAY) { relaySend(text); return; }
+  /* akrelay:end */
+  copyPrompt(text, "");
+}
+function copyPrompt(text, prefix) {
+  var out = document.getElementById("out");
+  out.style.display = "block";
+  out.value = text;
+  var done = function (copied) {
+    setStatus(prefix + (copied
+      ? "✓ コピーしました — Claude Code のターミナルに貼り付けて Enter"
+      : "下のテキストを選択してコピーし、Claude Code に貼り付けてください"), copied ? "ok" : "err");
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+  } else {
+    try { out.select(); done(document.execCommand("copy")); } catch (e) { done(false); }
+  }
+}
+function setStatus(msg, cls) {
+  var el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status " + cls;
+}
+
+var RELAY = null;                       // 中継 (別部品が検知時に設定。無ければ null = コピー経路)
+/* akrelay:start */
+/* ---------- 直接送信 (assets/akapen-serve.py のローカル中継。http で開かれた時だけ) ---------- */
+var SENT_KEY = DRAFT_KEY + ":sent";     // 送信済みの記録 (再送はいつでも可)
+function relaySheetName() {
+  var n = location.pathname.split("/").pop() || "";
+  try { return decodeURIComponent(n); } catch (e) { return n; }
+}
+function relayUi() {
+  var btn = document.getElementById("genBtn");
+  btn.textContent = localStorage.getItem(SENT_KEY) ? "もう一度送信" : "送信";
+  document.querySelectorAll("#akForm p.m").forEach(function (p) {
+    p.innerHTML = p.innerHTML.replace(/一番下の \[貼り付ける文章を作る\] を押し、出たテキストを Claude Code のターミナルに貼って Enter/, "一番下の [送信] を押す (ターミナルに貼る必要はない)");
+  });
+}
+function relayDetect() {
+  if (!/^https?:$/.test(location.protocol) || !window.fetch) return;
+  fetch("/akapen-ping", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.ok) { RELAY = { sheet: relaySheetName() }; relayUi(); }
+  }).catch(function () {});
+}
+function relaySend(text) {
+  var btn = document.getElementById("genBtn");
+  btn.disabled = true;
+  setStatus("送信中…", "");
+  fetch("/akapen-answer", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sheet: RELAY.sheet, text: text }) })
+    .then(function (r) { return r.json().then(function (j) { return (r.ok && j && j.ok) ? j : Promise.reject(j && j.error || ("HTTP " + r.status)); }); })
+    .then(function () {
+      try { localStorage.setItem(SENT_KEY, String(Date.now())); } catch (e) {}
+      btn.disabled = false; btn.textContent = "もう一度送信";
+      document.getElementById("out").style.display = "none";
+      setStatus("✓ 送信しました。ターミナルに戻ってください (このタブは閉じてよい)", "ok");
+    })
+    .catch(function (err) {
+      btn.disabled = false;
+      copyPrompt(text, "中継に送れませんでした (" + err + ") — 代わりにコピーします: ");
+    });
+}
+/* akrelay:end */
+
+loadDraft();
+/* akrelay:start */
+relayDetect();
+/* akrelay:end */
+</script>
+</body>
+</html>

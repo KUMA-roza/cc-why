@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# レポートと推定結果は会話ログの一部を含む。リポジトリに入れない
+*.infer.json
+/cc-why/
