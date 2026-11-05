@@ -1,0 +1,58 @@
+{
+  "kicker": "テンプレートの使い方",
+  "title": "この図解ページは content.json だけで組み上がる",
+  "conclusion": "紙面の構成はテンプレートに固定済み。作り手が書くのは構造化データ (content.json) と SVG 図解だけで、レイアウトの発明は毎回ゼロになる。",
+  "three_lines": [
+    "冒頭 3 点セット (キッカー・主張タイトル・結論ボックス) で読み手は 30 秒で結論を取れる。",
+    "全体解説 1 枚 (グラレコ) が地図になり、詳細セクションの SVG 図解が各論を運ぶ。",
+    "render.js が 4±1・完全語・トークン準拠を機械検査してから HTML を書き出す。"
+  ],
+  "hero": {
+    "src": "hero-sample.svg",
+    "alt": "content.json が render.js の機械検査を通って out.html の紙面になる流れのグラレコ",
+    "caption": "content.json が機械検査を通って紙面になる流れ。実際の紙面ではここに概要図のグラレコ画像を置く。",
+    "width": 1200,
+    "height": 420
+  },
+  "sections": [
+    {
+      "heading": "タイプスケールは 8 段の役割名で呼ぶ",
+      "body": [
+        "本文 15px を基準に、セクション見出し 18px・タイトル 21px・ディスプレイ 27px と**役割ごとに 1 段ずつ上がる**。サイズを場当たりで発明しないことが紙面間の一貫性を作る。"
+      ],
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 700 150\" role=\"img\" aria-label=\"タイプスケール 4 段の実寸比較。本文 15px からディスプレイ 27px まで\"><g font-size=\"12.5\" font-family=\"ui-monospace, Menlo, monospace\"><text x=\"0\" y=\"22\" fill=\"var(--ink)\">本文 15px</text><rect x=\"170\" y=\"10\" width=\"150\" height=\"16\" rx=\"4\" fill=\"var(--accent)\" opacity=\"0.35\"/><text x=\"0\" y=\"58\" fill=\"var(--ink)\">セクション 18px</text><rect x=\"170\" y=\"46\" width=\"180\" height=\"16\" rx=\"4\" fill=\"var(--accent)\" opacity=\"0.6\"/><text x=\"0\" y=\"94\" fill=\"var(--ink)\">タイトル 21px</text><rect x=\"170\" y=\"82\" width=\"210\" height=\"16\" rx=\"4\" fill=\"var(--accent)\" opacity=\"0.6\"/><text x=\"0\" y=\"130\" fill=\"var(--ink)\">ディスプレイ 27px</text><rect x=\"170\" y=\"118\" width=\"270\" height=\"16\" rx=\"4\" fill=\"var(--accent)\"/><text x=\"450\" y=\"130\" fill=\"var(--muted)\">単位: px (template.html の定義)</text></g></svg>",
+      "fig_caption": "タイプスケール 4 段の実寸比較。段が上がるごとに役割が変わる点を見る。"
+    },
+    {
+      "heading": "色は 9 トークンが職務専任で働く",
+      "body": [
+        "アクセント青は導線とデータ可視化、緑・橙・赤は状態専任。装飾のための色は 0 個で、SVG 図解の中でも生 hex は render.js が拒否する。"
+      ]
+    },
+    {
+      "heading": "検査に落ちた content.json は HTML にならない",
+      "body": [
+        "three_lines は 3 本ちょうど、セクションは最大 5 (4±1)。SVG は viewBox・aria-label・トークン参照色が無いと render が止まる。作り手の規律をプロンプトでなく機械で担保する。"
+      ]
+    }
+  ],
+  "appendix": {
+    "summary": "このサンプルが検査している契約の一覧 (7 項目)",
+    "body": [
+      "kicker 60 字以内 / title 80 字以内 / conclusion 200 字以内 (「結論:」前置は render 側)。",
+      "three_lines はちょうど 3 本。sections は 1〜5 個で各 1 主張。",
+      "SVG: viewBox / aria-label / xmlns 必須、script・外部参照・生 hex・未定義 token・図形の ink 面塗り禁止。",
+      "画像参照 (hero / 節画像) は out.html と同じ dir に実在する相対パスのみ。",
+      "appendix.summary に「詳細/その他/まとめ」単語だけの見出しは禁止 (中身と分量を予告する)。"
+    ]
+  },
+  "meta": {
+    "date": "2026-10-26",
+    "source": "同梱の assets/template.html (色・文字サイズの定義)",
+    "author": "cognitive-ease-html サンプル"
+  },
+  "callout": {
+    "label": "原則",
+    "text": "紙面の発明をやめてデータだけ書く — 構成・トークン・強弱の語彙は **テンプレートが先に決めている**。"
+  }
+}

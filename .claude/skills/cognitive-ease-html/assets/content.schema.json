@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cognitive-ease-html content.json",
+  "description": "テンプレート (assets/template.html) に流し込む構造化データ。render.js が同じ検査を自前で実装している (外部ライブラリに頼らないため。このファイルは人が読む仕様書として置いている)。",
+  "type": "object",
+  "required": [
+    "kicker",
+    "title",
+    "conclusion",
+    "three_lines",
+    "sections",
+    "meta"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kicker": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "description": "タイトルの上に等幅・大文字で出る短いラベル (例: 実測メモ / 障害の振り返り)。冒頭 3 点セット (キッカー・タイトル・結論) の 1 つ。題材名 + ジャンル語だけの埋め草にしない"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "主張のタイトル。ありがちな 4 つの型 (ダッシュで副題をつなぐ・『』で括る・体言止め + 抽象名詞・どこにでも使える決まり文句) に頼らず、実数・言い切り・対比・問いの形を先に検討する"
+    },
+    "conclusion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "結論ボックス本文。テンプレ側で「結論: 」が前置されるので本文のみ。一文 ≤ 80 字 (render が検査)"
+    },
+    "three_lines": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120,
+        "description": "完全な文 (一文 ≤ 80 字 — render が検査)。**で囲むと太字強調"
+      },
+      "description": "3 行解説。各行は完全な文"
+    },
+    "hero": {
+      "type": "object",
+      "required": [
+        "src",
+        "alt",
+        "caption"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "概要図 1 枚 (紙面全体の地図になるグラレコ画像。飾りのイラストではない) への相対パス。out.html と同じ dir に実在すること (render が検査。外部 URL・絶対パスは拒否)"
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "description": "「図 1 — 」は render が採番して前置。何を見るかを書く"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "実画像の実寸 px。height と対で指定 (読み込み中にレイアウトがずれないよう枠を確保する。macOS なら sips -g pixelWidth で取れる)"
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "description": "省略可 (画像なし構成)。省略時は hero ブロックごと出力しない"
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "description": "詳細セクション。4±1 (最大 5)。各セクション 1 主張",
+      "items": {
+        "type": "object",
+        "required": [
+          "heading",
+          "body"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "セクションの主張タイトル"
+          },
+          "body": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "段落 (1-3 つ)。一文 ≤ 80 字 (render が検査)。**で囲むと太字強調"
+          },
+          "svg": {
+            "type": "string",
+            "pattern": "^<svg[\\s>]",
+            "description": "インライン SVG 図解 (xmlns・viewBox 必須。script/外部参照/生 hex/未定義 token/図形の ink 面塗りは render が拒否)。色はテンプレ実在 token の var() 参照で書く"
+          },
+          "fig_caption": {
+            "type": "string",
+            "minLength": 1,
+            "description": "「図 N — 」は render が採番して前置。何を見るかを書く。svg か image がある場合は必須"
+          },
+          "image": {
+            "type": "object",
+            "required": [
+              "src",
+              "alt"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "src": {
+                "type": "string",
+                "description": "節のグラレコ画像への相対パス。out.html と同じ dir に実在すること (render が検査)"
+              },
+              "alt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "実画像の実寸 px。height と対で指定 (読み込み中にレイアウトがずれないよう枠を確保する)"
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "description": "構造・関係・情景を絵で掴ませる節のグラレコ画像 (実数・量・トレンドのデータ図は svg で)。svg と併用不可 (1 節 1 図)。ある場合 fig_caption 必須"
+          },
+          "table": {
+            "type": "object",
+            "required": [
+              "headers",
+              "rows"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "headers": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 6,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rows": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "description": "後で値を引く参照用データ (単価・版番号・対応表・データ点 4 未満・同一軸に乗らない異種の量) のみここに (URL セルは自動でリンクになる)。量の比較・推移・構成比は表でなく svg のチャート (実数ラベル併記) で描く — 量の違いは表の数字より図の長さの方が一目で伝わる。svg と併用可"
+          },
+          "table_caption": {
+            "type": "string",
+            "minLength": 1,
+            "description": "「表 N — 」は render が採番して前置。table があるなら必須"
+          }
+        }
+      }
+    },
+    "appendix": {
+      "type": "object",
+      "required": [
+        "summary",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "中身と分量が予測できる文言 (「詳細」「その他」だけの見出しは禁止 — 開く前に中身が分からないため)"
+        },
+        "body": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "table": {
+          "type": "object",
+          "required": [
+            "headers",
+            "rows"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "headers": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 6,
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "description": "数値主体の補足はこの表で (数値だけの列は自動で等幅・右揃えになる)。本文段落に数値を並べない"
+        }
+      },
+      "description": "省略可。補足・根拠・生データの折りたたみ (@media print では強制展開される)"
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "date",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "作成日 (絶対日付)"
+        },
+        "source": {
+          "type": "string",
+          "description": "データの出所・元資料への参照。URL を含めると render がリンク化する (PDF 注釈にも生きる)"
+        },
+        "author": {
+          "type": "string",
+          "description": "省略可"
+        }
+      }
+    },
+    "kpis": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "n",
+          "label"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "n": {
+            "type": "string",
+            "description": "大数字 + 単位 (等幅 34px で出る。例: 20 倍 / $124.70)"
+          },
+          "label": {
+            "type": "string",
+            "description": "完全語のラベル"
+          },
+          "delta": {
+            "type": "string",
+            "description": "省略可。補足 1 行 (前回比・内訳)"
+          }
+        }
+      },
+      "description": "省略可 (冒頭の既定ではない — 冒頭に置く絵は hero の概要図が既定)。3 行解説の直後に出る KPI カード行 (2〜4 枚)。ダッシュボード型・数値が主役の紙面でだけ使い、元データの実数を書く"
+    },
+    "callout": {
+      "type": "object",
+      "required": [
+        "label",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "先頭太字の見出し語 (例: 原則 / 注意)"
+        },
+        "text": {
+          "type": "string",
+          "description": "本文。**強調** が使える"
+        }
+      },
+      "description": "省略可。詳細セクションの後に出す持ち帰り 1 箱 (白地 + 罫線 + 導線アクセント)"
+    }
+  }
+}

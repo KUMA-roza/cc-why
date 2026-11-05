@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-label="content.json が render.js の機械検査を通って out.html の紙面になる流れのグラレコ">
+  <!-- サンプルの hero (render の動作確認用に手描きしたもの)。実際の紙面では、手順 3 で用意した概要図 (グラレコ画像) を置く。
+       色はテーマ 9 トークンの値のみ: ink #212529 / muted #64707C / paper #FFFFFF / paper-dim #F6F8FA / accent #2563EB / ok #16A34A / err #DC2626 -->
+  <rect x="0" y="0" width="1200" height="420" fill="#FFFFFF"/>
+  <g font-family="Hiragino Kaku Gothic ProN, Hiragino Sans, sans-serif">
+
+    <!-- 1: content.json -->
+    <g transform="rotate(-0.8 210 210)">
+      <rect x="60" y="120" width="300" height="180" rx="16" fill="#FFFFFF" stroke="#212529" stroke-width="4.5" stroke-linejoin="round"/>
+      <text x="210" y="195" text-anchor="middle" font-size="40" font-weight="700" fill="#212529">content.json</text>
+      <text x="210" y="245" text-anchor="middle" font-size="24" fill="#64707C">作り手が書く構造化データ</text>
+    </g>
+
+    <!-- 矢印 1 (導線 = accent、マーカーの太線) -->
+    <g stroke="#2563EB" stroke-width="7" stroke-linecap="round" fill="none">
+      <path d="M 372 208 C 405 200, 430 214, 458 206"/>
+      <path d="M 436 190 L 462 206 L 434 222"/>
+    </g>
+
+    <!-- 2: render.js 機械検査 -->
+    <g transform="rotate(0.7 610 210)">
+      <rect x="480" y="112" width="270" height="190" rx="16" fill="#F6F8FA" stroke="#212529" stroke-width="4.5" stroke-linejoin="round"/>
+      <text x="615" y="185" text-anchor="middle" font-size="38" font-weight="700" fill="#212529">render.js</text>
+      <text x="615" y="235" text-anchor="middle" font-size="24" fill="#64707C">契約どおりか機械検査</text>
+    </g>
+
+    <!-- 検査に落ちる枝 (状態 = err のみ) -->
+    <g stroke="#DC2626" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M 615 306 C 612 326, 617 338, 614 352"/>
+      <path d="M 600 338 L 614 356 L 629 340"/>
+      <path d="M 560 380 L 588 404 M 588 380 L 560 404"/>
+    </g>
+    <text x="606" y="400" font-size="24" font-weight="700" fill="#DC2626">契約違反はここで止まる</text>
+
+    <!-- 矢印 2 -->
+    <g stroke="#2563EB" stroke-width="7" stroke-linecap="round" fill="none">
+      <path d="M 762 206 C 795 214, 820 200, 848 208"/>
+      <path d="M 826 190 L 852 208 L 824 224"/>
+    </g>
+
+    <!-- 3: out.html -->
+    <g transform="rotate(-0.6 990 210)">
+      <rect x="870" y="120" width="270" height="180" rx="16" fill="#FFFFFF" stroke="#212529" stroke-width="4.5" stroke-linejoin="round"/>
+      <text x="1005" y="195" text-anchor="middle" font-size="40" font-weight="700" fill="#212529">out.html</text>
+      <text x="1005" y="245" text-anchor="middle" font-size="24" fill="#64707C">そのまま配れる紙面</text>
+      <!-- 合格の標し (状態 = ok) -->
+      <circle cx="1128" cy="122" r="30" fill="#FFFFFF" stroke="#16A34A" stroke-width="5"/>
+      <path d="M 1112 122 L 1124 135 L 1146 108" fill="none" stroke="#16A34A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- 見出しの走り書き (レイアウトの発明はゼロ) -->
+    <text x="600" y="62" text-anchor="middle" font-size="30" font-weight="700" fill="#212529">レイアウトの発明はゼロ — データだけ書く</text>
+    <path d="M 388 84 C 460 92, 740 92, 812 84" fill="none" stroke="#2563EB" stroke-width="6" stroke-linecap="round" opacity="0.35"/>
+  </g>
+</svg>

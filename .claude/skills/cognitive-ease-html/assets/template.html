@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<style>
+/* ============================================================
+   TOKENS — 色・文字サイズ・行間の定義はこのブロックだけに置く。
+   生 hex はここ以外に書かない (紙面と図の色をそろえるため)。
+   フォントは外部から読み込まない — オフラインでも同じ見た目で開けるよう、
+   OS 標準の日本語フォントを先頭に並べている。
+   ============================================================ */
+:root {
+  --ink: #212529;
+  --muted: #64707C;
+  --line: #DEE2E6;
+  --paper: #FFFFFF;
+  --paper-dim: #F6F8FA;
+  --accent: #2563EB;
+  --ok: #16A34A;
+  --warn: #D97706;
+  --err: #DC2626;
+  --font-sans: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans JP', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Noto Sans Mono', monospace;
+  --text-micro: 11.5px;
+  --text-caption: 12.5px;
+  --text-data: 13.5px;
+  --text-body: 15px;
+  --text-section: 18px;
+  --text-title: 21px;
+  --text-display: 27px;
+  --text-stat: 34px;
+  --leading-body: 1.9;
+  --leading-data: 1.6;
+  --leading-heading: 1.45;
+  --measure: 760px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-sans); font-weight: 400;
+  font-size: var(--text-body); line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  /* 長い URL・連続した英数字をスマホ幅で折り返す (折り返さないと段落からはみ出す)。
+     表セルだけは table.data 側で normal に戻す — 列は自然幅を保ち .table-scroll が横に逃がす */
+  overflow-wrap: anywhere;
+}
+.wrap { max-width: var(--measure); margin: 0 auto; padding: 40px 24px 0; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+/* @media print は最下部に置く (後勝ちで基底ルールを確実に上書きするため — ここに書かない) */
+
+/* 冒頭 3 点セット (キッカー・タイトル・結論ボックス) */
+.kicker {
+  font-family: var(--font-mono); font-size: var(--text-caption); font-weight: 400;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+h1.display {
+  font-size: var(--text-display); font-weight: 700; line-height: var(--leading-heading);
+  letter-spacing: 0.01em; margin: 10px 0 16px;
+}
+.conclusion.lead {
+  background: var(--paper-dim); border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0; padding: 14px 20px;
+  font-weight: 500; margin-bottom: 28px;
+}
+
+/* hero (全体解説 1 枚) */
+figure.hero { margin: 0 0 8px; }
+figure.hero img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; display: block; }
+
+/* 3 行解説 */
+ol.steps { list-style: none; counter-reset: step; margin: 8px 0 4px; }
+.steps li { counter-increment: step; position: relative; padding: 0 0 14px 40px; }
+.steps li::before {
+  content: counter(step); position: absolute; left: 0; top: 1px;
+  width: 26px; height: 26px; border: 1.5px solid var(--ink); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--text-data);
+}
+
+/* 詳細セクション */
+section.block { padding: 32px 0 4px; border-top: 1px solid var(--line); margin-top: 28px; }
+h2.title { font-size: var(--text-title); font-weight: 700; line-height: var(--leading-heading); letter-spacing: 0.01em; margin: 0 0 6px; border-left: 3px solid var(--accent); padding-left: 10px; }
+p { margin-bottom: 14px; }
+figure.diagram { margin: 8px 0 4px; }
+figure.diagram svg { width: 100%; height: auto; display: block; }
+figure.diagram img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; display: block; }
+.caption { font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-data); margin: 6px 0 18px; }
+
+/* 節見出しの上に「SECTION 01」のような番号ラベルは置かない (読み手に情報を足さないため) — render も出力しない */
+
+/* KPI カード — 数値が主役の紙面だけで使う */
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0 8px; }
+@media (max-width: 680px) { .kpis { grid-template-columns: 1fr; } }
+.kpi { border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+.kpi .n { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-stat); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpi .label { font-size: var(--text-data); font-weight: 500; color: var(--ink); }
+.kpi .delta { font-size: var(--text-caption); color: var(--muted); }
+
+/* コールアウト — 白地 + 罫線 + 導線アクセント */
+.callout { display: flex; gap: 10px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px 16px; font-size: var(--text-data); line-height: var(--leading-data); margin: 26px 0 6px; }
+.callout b { font-weight: 700; }
+
+/* データ表 — sections[].table / appendix.table 用。
+   列が多い表や URL セルのある表はスマホ幅を超えるので、紙面全体でなく表の中だけを横スクロールさせる */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.data { width: 100%; border-collapse: collapse; font-size: var(--text-data); line-height: var(--leading-data); margin: 8px 0 4px; overflow-wrap: normal; }
+.data th {
+  text-align: left; font-size: var(--text-micro); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700; border-bottom: 1.5px solid var(--ink); padding: 8px 10px;
+}
+.data td { border-bottom: 1px solid var(--line); padding: 9px 10px; }
+.data .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.data th.num { text-align: right; }
+
+/* 折りたたみ (補足・根拠) */
+details.fold { border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; }
+.fold summary {
+  padding: 12px 18px; font-weight: 500; font-size: var(--text-body); cursor: pointer;
+  list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary .size { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); }
+.fold summary::after { content: "開く +"; font-size: var(--text-caption); color: var(--accent); flex-shrink: 0; }
+.fold[open] summary::after { content: "閉じる −"; }
+.fold .body { padding: 0 18px 14px; font-size: var(--text-data); line-height: var(--leading-data); }
+
+/* メタ行 */
+footer.end { border-top: 1px solid var(--line); margin-top: 40px; padding: 20px 0 48px; }
+.meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: var(--text-caption); color: var(--muted); }
+
+/* ============================================================
+   PRINT — 基底ルールより後 (後勝ち) に置くこと
+   ============================================================ */
+@media print {
+  /* ページ余白を明示 (既定余白は広すぎて末尾に孤立ページを作りやすい) */
+  @page { margin: 12mm 11mm 14mm; }
+  a { color: var(--ink); text-decoration: none; }
+  /* PDF で details の中身が欠落しないよう強制展開 (Chrome 131+ の ::details-content) */
+  details.fold::details-content { content-visibility: visible; display: block; }
+  .fold summary::after, .fold[open] summary::after { content: ""; }
+  /* 図とキャプション・結論ボックスの改ページ分断を防ぐ (表は行単位で保護し分割は許す) */
+  figure.diagram, figure.hero, .conclusion.lead, ol.steps, .kpis, .callout, footer.end { break-inside: avoid; page-break-inside: avoid; }
+  .data tr { break-inside: avoid; }
+  /* 印刷はスクロールできない — 表のはみ出しはページ幅で切らず従来どおり visible に */
+  .table-scroll { overflow: visible; }
+  /* 末尾ほぼ白紙ページの抑制 (余白だけ詰める。文字サイズは変えない) */
+  .wrap { padding-top: 24px; }
+  p { margin-bottom: 11px; }
+  section.block { padding: 16px 0 2px; margin-top: 12px; }
+  .conclusion.lead { margin-bottom: 20px; }
+  .steps li { padding-bottom: 10px; }
+  figure.hero { margin-bottom: 4px; }
+  .caption { margin: 5px 0 12px; }
+  .data td { padding: 4px 10px; }
+  .data th { padding: 6px 10px; }
+  .fold summary { padding: 9px 18px; }
+  .fold .body { padding-bottom: 5px; }
+  footer.end { margin-top: 8px; padding: 4px 0 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">{{KICKER}}</div>
+    <h1 class="display">{{TITLE}}</h1>
+    <div class="conclusion lead">結論: {{CONCLUSION}}</div>
+  </header>
+
+  {{HERO}}
+
+  <ol class="steps" aria-label="3 行解説">
+{{THREE_LINES}}
+  </ol>
+
+{{KPIS}}
+
+{{SECTIONS}}
+
+{{CALLOUT}}
+
+{{APPENDIX}}
+
+  <footer class="end">
+    <div class="meta">{{META}}</div>
+  </footer>
+
+</div>
+</body>
+</html>

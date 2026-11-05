@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cognitive-ease-html design.json (手順 1: 伝え方の設計)",
+  "description": "content.json より先に決める伝え方の設計。手順 2 (content.json) の title / three_lines / sections の採否はすべてここから導く。手順 5 (文脈ゼロの読み手チェック) では、読み手が答えた内容をこのファイルと照らし合わせる。完成した紙面と一緒に保存しておくと、後から設計意図を確かめられる。",
+  "type": "object",
+  "required": [
+    "reader",
+    "reader_knows",
+    "takeaway",
+    "support",
+    "subject_anchor"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "reader": {
+      "type": "string",
+      "minLength": 1,
+      "description": "誰が読むか (1 行)。手順 5 で「誰向けか」の答え合わせに使う"
+    },
+    "reader_knows": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "読者が既に知っている前提 (空配列 = 一般常識のみの読者)。ここに無い固有名詞・内輪の言葉は、本文で説明する前に kicker / title / hero に置かない"
+    },
+    "takeaway": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "読み手に持ち帰ってほしい 1 文 = 紙面の存在理由。title はこれの言い換え、hero はこれを絵にする。手順 5 で「一番の主張」の答え合わせに使う"
+    },
+    "support": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "takeaway を支える最小の事実 (three_lines の元)。ここから導出できないセクションは採録しない"
+    },
+    "subject_anchor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "description": "主題の固有名 (「何の話か」)。kicker / title / hero のいずれにも必ず載せる。手順 5 で「何の話か」の答え合わせに使う"
+    },
+    "avoid_terms": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "読者に見せない内輪の言葉を実際の語で並べる (依頼者から禁止語を指定されたらその写し。無ければフィールドごと省略してよい — 空配列も同じ意味)。手順 2 で一般的な言葉に言い換え、手順 5 では out.html の表示テキストにこれらの語が残っていないか検索で確かめる。残っていたら、読み手が気づいたかどうかに関係なく「説明の無い言葉」として数える"
+    }
+  }
+}
