@@ -2,7 +2,7 @@
 import { Inference, SessionDigest, Step } from './types';
 import { flatten } from './extract';
 
-interface Row {
+export interface Row {
   id: string;
   depth: number;
   time: string;
@@ -23,7 +23,7 @@ interface Row {
   sub: string;
 }
 
-function toRows(steps: Step[], inf: Map<string, Inference>): Row[] {
+export function toRows(steps: Step[], inf: Map<string, Inference>): Row[] {
   return flatten(steps).map((s) => {
     const i = inf.get(s.id);
     return {

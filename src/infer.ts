@@ -2,7 +2,7 @@
  * 推定: 抽出したステップを claude -p か codex exec に渡し、各ステップに「なぜ・根拠の強さ・指示元」を付ける。
  * 推定の実行はログに残さない (claude: --no-session-persistence / codex: --ephemeral) (分析対象に混ざらない)。
  */
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -99,10 +99,30 @@ function renderStep(s: Step): string {
     .join('\n');
 }
 
-function callClaude(
-  prompt: string,
-  model: string | undefined,
-): { steps: (Inference & { id: string })[] } {
+type Answer = { steps: (Inference & { id: string })[] };
+
+/** 子プロセスを非同期で動かす (serve の中でもイベントループを止めない)。シェルは通さない */
+function run(cmd: string, args: string[], input: string, cwd: string): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const ch = spawn(cmd, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => ch.kill('SIGTERM'), 10 * 60 * 1000);
+    ch.stdout.on('data', (b) => (stdout += b));
+    ch.stderr.on('data', (b) => (stderr += b));
+    ch.on('error', (e) => {
+      clearTimeout(timer);
+      reject(new Error(`${cmd} を起動できません: ${e.message}`));
+    });
+    ch.on('close', (status) => {
+      clearTimeout(timer);
+      resolve({ status, stdout, stderr });
+    });
+    ch.stdin.end(input);
+  });
+}
+
+async function callClaude(prompt: string, model: string | undefined): Promise<Answer> {
   const args = [
     '-p',
     '--no-session-persistence',
@@ -121,30 +141,16 @@ function callClaude(
     JSON.stringify(SCHEMA),
   ];
   if (model) args.push('--model', model);
-  const r = spawnSync('claude', args, {
-    input: prompt,
-    encoding: 'utf8',
-    cwd: os.tmpdir(),
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 10 * 60 * 1000,
-  });
-  if (r.error) throw new Error(`claude を起動できません: ${r.error.message}`);
-  let out: {
-    structured_output?: { steps: (Inference & { id: string })[] };
-    is_error?: boolean;
-    result?: string;
-  };
+  const r = await run('claude', args, prompt, os.tmpdir());
+  let out: { structured_output?: Answer; is_error?: boolean; result?: string };
   try {
     out = JSON.parse(r.stdout);
   } catch {
-    throw new Error(
-      `claude -p の出力が JSON ではありません (exit ${r.status}): ${(r.stderr || r.stdout).slice(0, 400)}`,
-    );
+    throw new Error(`claude -p の出力が JSON ではありません (exit ${r.status}): ${(r.stderr || r.stdout).slice(0, 400)}`);
   }
-  if (out.is_error || !out.structured_output)
+  if (out.is_error || !out.structured_output) {
     throw new Error(`claude -p が失敗しました: ${String(out.result).slice(0, 400)}`);
-  const dump = process.env.CC_WHY_DEBUG;
-  if (dump) fs.writeFileSync(dump, JSON.stringify(out.structured_output, null, 1));
+  }
   return out.structured_output;
 }
 
@@ -152,24 +158,16 @@ function callClaude(
  * codex exec で推定する。--ephemeral でセッションを残さない (分析対象に混ざらない)。
  * read-only の sandbox・空の作業フォルダで動かす。codex にはシステムプロンプトの引数が無いので先頭に足す。
  */
-function callCodex(prompt: string, model: string | undefined): { steps: (Inference & { id: string })[] } {
+async function callCodex(prompt: string, model: string | undefined): Promise<Answer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-why-codex-'));
   try {
     const schemaFile = path.join(dir, 'schema.json');
     const outFile = path.join(dir, 'out.json');
     fs.writeFileSync(schemaFile, JSON.stringify(SCHEMA));
-    const args = ['exec', '--ephemeral', '--skip-git-repo-check', '-s', 'read-only', '-C', dir,
-      '--output-schema', schemaFile, '-o', outFile];
+    const args = ['exec', '--ephemeral', '--skip-git-repo-check', '-s', 'read-only', '-C', dir, '--output-schema', schemaFile, '-o', outFile];
     if (model) args.push('-m', model);
     args.push('-');
-    const r = spawnSync('codex', args, {
-      input: `${SYSTEM}\n\n${prompt}`,
-      encoding: 'utf8',
-      cwd: dir,
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: 10 * 60 * 1000,
-    });
-    if (r.error) throw new Error(`codex を起動できません: ${r.error.message}`);
+    const r = await run('codex', args, `${SYSTEM}\n\n${prompt}`, dir);
     if (r.status !== 0 || !fs.existsSync(outFile)) {
       throw new Error(`codex exec が失敗しました (exit ${r.status}): ${(r.stderr || r.stdout).slice(-400)}`);
     }
@@ -190,11 +188,37 @@ function skillLine(d: SessionDigest, ref: string): string | undefined {
   return sk?.lines[Number(m[2]) - 1]?.trim() || undefined;
 }
 
+function readCache(file: string | undefined): Cache {
+  if (!file || !fs.existsSync(file)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+/** 推定済みの分だけを引く (LLM は呼ばない) */
+export function cached(d: SessionDigest, cacheFile: string | undefined, engine: Engine = 'claude'): Map<string, Inference> {
+  const cache = readCache(cacheFile);
+  const out = new Map<string, Inference>();
+  for (const s of flatten(d.steps)) {
+    const c = cache[keyOf(s, engine)];
+    if (c) out.set(s.id, c);
+  }
+  return out;
+}
+
+/** まだ推定していないステップの数 */
+export function pendingCount(d: SessionDigest, cacheFile: string | undefined, engine: Engine, filter?: (s: Step) => boolean): number {
+  const cache = readCache(cacheFile);
+  return flatten(d.steps).filter(filter ?? (() => true)).filter((s) => !cache[keyOf(s, engine)]).length;
+}
+
 /**
  * 推定を付ける。cacheFile があれば読み書きし、手がかりが同じステップは再推定しない。
- * filter で対象を絞る (例: 特定 skill のステップだけ)。
+ * filter で対象を絞る (例: 特定 skill のステップだけ / 結果まで揃ったステップだけ)。
  */
-export function infer(
+export async function infer(
   d: SessionDigest,
   opts: {
     cacheFile?: string;
@@ -202,14 +226,12 @@ export function infer(
     engine?: Engine;
     filter?: (s: Step) => boolean;
     log?: (m: string) => void;
+    progress?: (done: number, total: number) => void;
   },
-): Map<string, Inference> {
+): Promise<Map<string, Inference>> {
   const log = opts.log ?? (() => {});
   const engine: Engine = opts.engine ?? 'claude';
-  const cache: Cache =
-    opts.cacheFile && fs.existsSync(opts.cacheFile)
-      ? JSON.parse(fs.readFileSync(opts.cacheFile, 'utf8'))
-      : {};
+  const cache = readCache(opts.cacheFile);
   const all = flatten(d.steps).filter(opts.filter ?? (() => true));
   const todo = all.filter((s) => !cache[keyOf(s, engine)]);
   const head = [
@@ -220,13 +242,14 @@ export function infer(
     .filter(Boolean)
     .join('\n\n');
 
+  opts.progress?.(0, todo.length);
   for (let i = 0; i < todo.length; i += BATCH) {
     const batch = todo.slice(i, i + BATCH);
     log(`推定中 (${engine}) ${i + 1}-${i + batch.length} / ${todo.length} ステップ…`);
     const prompt = `${head}\n\n# 推定するステップ\n${batch.map(renderStep).join('\n\n')}\n\n上の ${batch.length} ステップすべてについて JSON で答えてください。`;
-    const res = engine === 'codex' ? callCodex(prompt, opts.model) : callClaude(prompt, opts.model);
+    const res = engine === 'codex' ? await callCodex(prompt, opts.model) : await callClaude(prompt, opts.model);
     for (const s of batch) {
-      const r = res.steps.find((x) => String(x.id).replace(/[^0-9.]/g, "").replace(/\.$/, "") === s.id);
+      const r = res.steps.find((x) => String(x.id).replace(/[^0-9.]/g, '').replace(/\.$/, '') === s.id);
       if (!r) continue;
       cache[keyOf(s, engine)] = {
         why: r.why,
@@ -237,8 +260,12 @@ export function infer(
       };
     }
     if (opts.cacheFile) fs.writeFileSync(opts.cacheFile, JSON.stringify(cache, null, 1));
+    opts.progress?.(Math.min(i + BATCH, todo.length), todo.length);
   }
+  return mapFrom(all, cache, engine);
+}
 
+function mapFrom(all: Step[], cache: Cache, engine: Engine): Map<string, Inference> {
   const out = new Map<string, Inference>();
   for (const s of all) {
     const c = cache[keyOf(s, engine)];

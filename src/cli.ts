@@ -11,6 +11,9 @@
  *     --skill <name>   この skill のステップだけ推定・表示
  *     --no-llm         推定せず、本人の言葉だけ並べる
  *     -o <file>        出力先 (既定 ~/.cache/cc-why/<id 先頭 8 桁>.html、Codex は codex-<id>.html)
+ *   cc-why serve [--port <n>] [--no-open]           ブラウザで一覧・推定・ライブ更新・相談をする (127.0.0.1 のみ)
+ *   cc-why wait [--timeout <秒>]                     ブラウザから送られた相談を待って表示する (エージェント側で実行)
+ *     届いたら全文を表示して exit 0。時間切れ (既定 600 秒) は exit 3
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -19,10 +22,11 @@ import { codexId, extractCodex, isCodexFile, listCodexFiles } from './codex';
 import { extractSession, flatten } from './extract';
 import { Engine, infer, noLlm } from './infer';
 import { renderReport } from './report';
+import { serve, waitConsult } from './serve';
 import { SessionDigest } from './types';
 
 const PROJECTS = path.join(os.homedir(), '.claude', 'projects');
-const FLAGS = new Set(['no-llm', 'codex', 'all']);
+const FLAGS = new Set(['no-llm', 'codex', 'all', 'no-open']);
 
 function projectDir(cwd: string): string {
   return path.join(PROJECTS, cwd.replace(/[^A-Za-z0-9]/g, '-'));
@@ -90,7 +94,7 @@ function list(opt: Record<string, string | true>, dir: string): void {
   for (const f of files.map((f) => path.join(dir, f)).sort(byTime)) printRow(extractSession(f));
 }
 
-function report(pos: string[], opt: Record<string, string | true>, dir: string): void {
+async function report(pos: string[], opt: Record<string, string | true>, dir: string): Promise<void> {
   if (!pos[0]) throw new Error('セッションを指定してください (cc-why list で一覧)');
   const engine = (typeof opt.engine === 'string' ? opt.engine : 'claude') as Engine;
   if (engine !== 'claude' && engine !== 'codex')
@@ -114,7 +118,7 @@ function report(pos: string[], opt: Record<string, string | true>, dir: string):
     note = '推定なし (--no-llm): 「なぜ」は本人の言葉がある行だけ。';
   } else {
     const cacheFile = out.replace(/\.html$/, '') + '.infer.json';
-    inf = infer(d, {
+    inf = await infer(d, {
       cacheFile,
       engine,
       model: typeof opt.model === 'string' ? opt.model : undefined,
@@ -131,13 +135,17 @@ function report(pos: string[], opt: Record<string, string | true>, dir: string):
   console.log(path.resolve(out));
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
   const { pos, opt } = parseArgs(rest);
   const dir = typeof opt.project === 'string' ? opt.project : projectDir(process.cwd());
   try {
     if (cmd === 'list') list(opt, dir);
-    else if (cmd === 'report') report(pos, opt, dir);
+    else if (cmd === 'report') await report(pos, opt, dir);
+    else if (cmd === 'serve') {
+      const port = typeof opt.port === 'string' ? Number(opt.port) : undefined;
+      await serve({ port, cwd: process.cwd(), claudeDir: dir, open: !opt['no-open'] });
+    } else if (cmd === 'wait') process.exit(await waitConsult(typeof opt.timeout === 'string' ? Number(opt.timeout) : 600));
     else {
       console.log(
         fs
